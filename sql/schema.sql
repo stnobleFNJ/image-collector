@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS `NAS_MEMBER` (
   `passwd`        varchar(255) NOT NULL COMMENT 'password_hash()',
   `name`          varchar(50)  NOT NULL DEFAULT '',
   `email`         varchar(100) NOT NULL DEFAULT '',
+  `is_admin`      tinyint(1)   NOT NULL DEFAULT 0 COMMENT '1:총괄 어드민',
   `last_login_at` datetime     DEFAULT NULL,
   `created_at`    datetime     NOT NULL,
   `updated_at`    datetime     NOT NULL,

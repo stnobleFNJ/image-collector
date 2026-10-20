@@ -8,40 +8,22 @@ $businesses = business_list();
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?= h(APP_TITLE) ?></title>
-<link rel="icon" href="assets/fnj_logo_icon.png">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
-<link rel="stylesheet" href="assets/app.css">
+<?php render_head(APP_TITLE); ?>
 </head>
 <body class="app-body">
 
-<header class="topbar">
-    <a class="brand" href="check.php">
-        <img src="assets/fnj_logo_icon.png" alt="FNJ">
-        <span>FNJ 이미지 <b>Check</b></span>
-    </a>
+<?php render_topbar($member, 'check'); ?>
 
-    <label class="size-ctrl" title="썸네일 크기">
-        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-        <input type="range" id="sizeRange" min="80" max="320" step="10" value="160" aria-label="썸네일 크기">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-        <output id="sizeVal">160px</output>
-    </label>
-
-    <div class="user">
-        <span class="user-name"><?= h($member['name'] !== '' ? $member['name'] : $member['login_id']) ?>님</span>
-        <a class="btn btn-ghost btn-sm" href="logout.php">로그아웃</a>
-    </div>
-</header>
-
+<div class="bsbar-wrap" id="bsbarWrap">
 <section class="bsbar">
     <div class="bsbar-head">
         <h2>사업 <small id="bsSelCount">0개 선택</small></h2>
         <input type="search" id="bsFilter" class="bs-filter" placeholder="사업명 검색">
         <button type="button" class="btn btn-ghost btn-sm" id="bsClear">선택 해제</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="bsToggleMore">펼치기</button>
+        <button type="button" class="btn btn-ghost btn-sm toggle-more" id="bsToggleMore" aria-expanded="false" aria-controls="bsChips">
+            <span class="toggle-label">펼치기</span><span class="more-cnt" id="bsMoreCnt" hidden></span>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
     </div>
     <div class="chips collapsed" id="bsChips">
         <?php foreach ($businesses as $b): ?>
@@ -52,6 +34,7 @@ $businesses = business_list();
         <?php endforeach; ?>
     </div>
 </section>
+</div>
 
 <div class="layout">
     <main class="main">
@@ -70,7 +53,10 @@ $businesses = business_list();
     <aside class="side">
         <div class="side-card">
             <div class="side-head">
-                <h2>내 선택 <span class="badge" id="pickCount">0</span></h2>
+                <button type="button" class="side-title" id="openPicks" title="내 선택만 새 창에서 크게 보기">
+                    내 선택 <span class="badge" id="pickCount">0</span>
+                    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M14 4h6v6M20 4l-8 8M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
                 <span class="muted side-scope" id="pickScope">전체 사업</span>
             </div>
             <div class="side-grid" id="pickGrid"></div>
@@ -78,10 +64,7 @@ $businesses = business_list();
             <form method="post" action="download.php" class="side-actions" id="dlForm">
                 <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
                 <input type="hidden" name="bs" id="dlBs" value="">
-                <button type="submit" class="btn btn-primary" id="dlBtn" disabled>
-                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    한번에 다운로드
-                </button>
+                <?php render_download_buttons(); ?>
                 <button type="button" class="btn btn-ghost" id="pickClear" disabled>선택 비우기</button>
             </form>
         </div>
@@ -90,9 +73,7 @@ $businesses = business_list();
 
 <div class="toast" id="toast"></div>
 
-<script>
-window.APP = { csrf: <?= json_encode(csrf_token()) ?> };
-</script>
-<script src="assets/check.js"></script>
+<?php render_core_js(); ?>
+<script src="assets/check.js?v=<?= filemtime(__DIR__ . '/assets/check.js') ?>"></script>
 </body>
 </html>

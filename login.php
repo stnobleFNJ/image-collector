@@ -35,12 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?= h(APP_TITLE) ?> · 로그인</title>
-<link rel="icon" href="assets/fnj_logo_icon.png">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
-<link rel="stylesheet" href="assets/app.css">
+<?php render_head(APP_TITLE . ' · 로그인'); ?>
 </head>
 <body class="login-body">
 

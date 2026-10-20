@@ -3,7 +3,7 @@
 
     var $ = function (id) { return document.getElementById(id); };
     var chipsEl = $('bsChips'), grid = $('grid'), pickGrid = $('pickGrid'), sentinel = $('sentinel');
-    var LS_BS = 'fnjimg.bs', LS_SIZE = 'fnjimg.size';
+    var LS_BS = 'fnjimg.bs';
 
     var state = {
         bs: new Set(),      // 선택한 bs_id
@@ -14,50 +14,13 @@
         picks: new Map()    // img_id -> item (현재 필터 기준)
     };
 
-    function store(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
-    function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
-
-    function toast(msg) {
-        var t = $('toast');
-        t.textContent = msg;
-        t.classList.add('show');
-        clearTimeout(toast.timer);
-        toast.timer = setTimeout(function () { t.classList.remove('show'); }, 2200);
-    }
-
-    function api(params, post) {
-        var opt = { headers: { 'X-CSRF-Token': APP.csrf }, credentials: 'same-origin' };
-        var url = 'api.php';
-        if (post) {
-            opt.method = 'POST';
-            opt.body = new URLSearchParams(params);
-        } else {
-            url += '?' + new URLSearchParams(params).toString();
-        }
-        return fetch(url, opt).then(function (r) {
-            return r.json().catch(function () { return { ok: false, error: '서버 응답 오류' }; }).then(function (d) {
-                if (d.login) {
-                    alert(d.error || '불법적인 접속입니다.');
-                    location.replace('login.php');
-                    throw new Error('login');
-                }
-                if (!d.ok) { throw new Error(d.error || '요청 실패'); }
-                return d;
-            });
-        });
-    }
+    var store = FNJ.store, load = FNJ.load, toast = FNJ.toast, api = FNJ.api;
 
     function bsParam() { return Array.from(state.bs).join(','); }
 
     /* ---------- 썸네일 크기 ---------- */
-    var range = $('sizeRange');
-    function applySize(v) {
-        document.documentElement.style.setProperty('--thumb', v + 'px');
-        $('sizeVal').textContent = v + 'px';
-    }
-    range.value = load(LS_SIZE) || range.value;
-    applySize(range.value);
-    range.addEventListener('input', function () { applySize(range.value); store(LS_SIZE, range.value); });
+    // 크기를 줄이면 화면에 빈 공간이 생길 수 있어 추가 로드 확인
+    FNJ.initSize(function () { if (state.more && !state.loading && isNearBottom()) { loadGrid(false); } });
 
     /* ---------- 사업 선택 ---------- */
     var chips = Array.from(chipsEl.querySelectorAll('.chip'));
@@ -94,16 +57,55 @@
         onBsChanged();
     });
 
-    $('bsToggleMore').addEventListener('click', function () {
-        var collapsed = chipsEl.classList.toggle('collapsed');
-        this.textContent = collapsed ? '펼치기' : '접기';
+    var moreBtn = $('bsToggleMore');
+
+    // 접힘/펼침 상태를 버튼 문구·아이콘·숨은 개수로 표시
+    function setExpanded(open) {
+        chipsEl.classList.toggle('collapsed', !open);
+        moreBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        moreBtn.querySelector('.toggle-label').textContent = open ? '접기' : '펼치기';
+        updateMoreCount();
+    }
+
+    function updateMoreCount() {
+        var cnt = $('bsMoreCnt');
+        var hiddenN = 0;
+        if (chipsEl.classList.contains('collapsed')) {
+            var limit = chipsEl.getBoundingClientRect().top + chipsEl.clientHeight - 8;
+            chips.forEach(function (c) {
+                if (!c.hidden && c.getBoundingClientRect().top > limit) { hiddenN++; }
+            });
+        }
+        cnt.hidden = hiddenN === 0;
+        cnt.textContent = '+' + hiddenN;
+        // 숨은 사업이 없으면 펼칠 필요가 없음
+        moreBtn.hidden = hiddenN === 0 && chipsEl.classList.contains('collapsed');
+    }
+
+    moreBtn.addEventListener('click', function () {
+        setExpanded(chipsEl.classList.contains('collapsed'));
     });
 
     $('bsFilter').addEventListener('input', function () {
         var kw = this.value.trim().toLowerCase();
         chips.forEach(function (c) { c.hidden = kw !== '' && c.dataset.name.toLowerCase().indexOf(kw) < 0; });
-        if (kw) { chipsEl.classList.remove('collapsed'); $('bsToggleMore').textContent = '접기'; }
+        if (kw) { setExpanded(true); } else { updateMoreCount(); }
     });
+
+    /* ---------- 고정 영역 높이 (우측 패널 위치 계산용) ---------- */
+    var topbar = document.querySelector('.topbar'), bsbarWrap = $('bsbarWrap');
+    function updateStickyOffsets() {
+        var th = topbar.offsetHeight;
+        document.documentElement.style.setProperty('--topbar-h', th + 'px');
+        document.documentElement.style.setProperty('--stick-h', (th + bsbarWrap.offsetHeight) + 'px');
+    }
+    if (window.ResizeObserver) {
+        new ResizeObserver(function () { updateStickyOffsets(); updateMoreCount(); }).observe(bsbarWrap);
+        new ResizeObserver(updateStickyOffsets).observe(topbar);
+    }
+    window.addEventListener('resize', function () { updateStickyOffsets(); updateMoreCount(); });
+    updateStickyOffsets();
+    updateMoreCount();
 
     /* ---------- 썸네일 그리드 ---------- */
     function makeTile(it, small) {
@@ -176,15 +178,12 @@
         if (entries[0].isIntersecting && state.more && !state.loading) { loadGrid(false); }
     }, { rootMargin: '600px 0px' }).observe(sentinel);
 
-    // 크기를 줄이면 화면에 빈 공간이 생길 수 있어 추가 로드 확인
-    range.addEventListener('change', function () { if (state.more && !state.loading && isNearBottom()) { loadGrid(false); } });
-
     /* ---------- 선택 (실시간 반영) ---------- */
     function renderPickCount() {
         var n = state.picks.size;
         $('pickCount').textContent = n.toLocaleString();
         $('pickEmpty').hidden = n > 0;
-        $('dlBtn').disabled = n === 0;
+        document.querySelectorAll('.dl-btn').forEach(function (b) { b.disabled = n === 0; });
         $('pickClear').disabled = n === 0;
     }
 
@@ -210,11 +209,29 @@
 
     function togglePick(it, on) {
         setPicked(it, on);  // 먼저 화면에 반영
-        api({ act: 'toggle', id: it.id, on: on ? 1 : 0 }, true).catch(function (e) {
+        api({ act: 'toggle', id: it.id, on: on ? 1 : 0 }, true).then(function () {
+            FNJ.broadcast({ type: 'pick', item: it, on: on });
+        }).catch(function (e) {
             setPicked(it, !on);
             if (e.message !== 'login') { toast('저장 실패: ' + e.message); }
         });
     }
+
+    // 내 선택 창에서 해제/비우기 하면 여기도 반영
+    FNJ.onBroadcast(function (msg) {
+        if (msg.type === 'pick' && !msg.on) {
+            setPicked(msg.item, false);
+        } else {
+            loadPicks();
+        }
+    });
+
+    // 내 선택 새 창
+    $('openPicks').addEventListener('click', function () {
+        var url = 'picks.php' + (state.bs.size ? '?bs=' + bsParam() : '');
+        var w = window.open(url, 'fnjimg_picks', 'width=1100,height=800');
+        if (w) { w.focus(); } else { location.href = url; }
+    });
 
     grid.addEventListener('click', function (e) {
         var tile = e.target.closest('.tile');
@@ -242,6 +259,8 @@
             state.picks.clear();
             pickGrid.innerHTML = '';
             d.items.forEach(function (it) { state.picks.set(it.id, it); addPickTile(it, false); });
+            // 그리드 선택 표시도 서버 상태에 맞춤 (그리드와 같은 사업 필터)
+            grid.querySelectorAll('.tile').forEach(function (t) { t.classList.toggle('picked', state.picks.has(+t.dataset.id)); });
             renderPickCount();
         }).catch(function (e) { if (e.message !== 'login') { toast(e.message); } });
     }
@@ -251,14 +270,17 @@
         if (!n || !confirm('현재 표시된 선택 ' + n + '개를 모두 해제할까요?')) { return; }
         api({ act: 'clear', bs: bsParam() }, true).then(function () {
             state.picks.forEach(function (it) { setPicked(it, false); });
+            FNJ.broadcast({ type: 'clear' });
             toast('선택을 비웠습니다.');
         }).catch(function (e) { if (e.message !== 'login') { toast(e.message); } });
     });
 
-    $('dlForm').addEventListener('submit', function () {
+    $('dlForm').addEventListener('submit', function (e) {
         $('dlBs').value = bsParam();
-        if (state.picks.size > 1000) { toast('최대 1,000장까지 다운로드됩니다.'); }
-        else { toast('ZIP 파일을 만드는 중입니다…'); }
+        var orig = e.submitter && e.submitter.value === 'orig';
+        var max = orig ? 500 : 1000;
+        if (state.picks.size > max) { toast('최대 ' + max.toLocaleString() + '장까지 다운로드됩니다.'); }
+        else { toast(orig ? 'NAS 원본을 모으는 중입니다. 장수가 많으면 시간이 걸립니다…' : 'ZIP 파일을 만드는 중입니다…'); }
     });
 
     /* ---------- 시작 ---------- */
