@@ -20,6 +20,22 @@ session_set_cookie_params(array(
 ));
 session_start();
 
+// 처리하지 못한 오류: 빈 500 화면 대신 안내 (자세한 내용은 서버 error_log 에 기록)
+set_exception_handler(function ($e) {
+    error_log('[imgCheck] ' . get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+    $msg = $e instanceof mysqli_sql_exception ? '데이터베이스 연결 또는 조회 중 오류가 발생했습니다.' : '서버 오류가 발생했습니다.';
+    if (!headers_sent()) {
+        http_response_code(500);
+    }
+    if (strpos(isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : '', 'api.php') !== false) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(array('ok' => false, 'error' => $msg), JSON_UNESCAPED_UNICODE);
+        return;
+    }
+    echo '<!DOCTYPE html><meta charset="utf-8"><title>오류</title><div style="font-family:sans-serif;max-width:480px;margin:80px auto;padding:24px;border-radius:14px;background:#fff4ec;color:#7a3b10">'
+        . '<b>' . htmlspecialchars($msg) . '</b><br><small>잠시 후 다시 시도하고, 계속되면 관리자에게 문의해 주세요.</small></div>';
+});
+
 function h($s) {
     return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
 }
@@ -42,6 +58,10 @@ function q($sql, $types = '', $params = array()) {
         $st->bind_param($types, ...$params);
     }
     $st->execute();
+    // get_result() 는 mysqlnd 드라이버가 있어야 동작 → 없는 서버(일부 호스팅)는 bind_result 로 대체
+    if (!method_exists($st, 'get_result')) {
+        return q_bind_rows($st);
+    }
     $res = $st->get_result();
     if ($res === false) {
         $n = $st->affected_rows;
@@ -49,6 +69,35 @@ function q($sql, $types = '', $params = array()) {
         return $n;
     }
     $rows = $res->fetch_all(MYSQLI_ASSOC);
+    $st->close();
+    return $rows;
+}
+
+// mysqlnd 가 없을 때: 결과 컬럼을 bind_result 로 받아 배열로 반환
+function q_bind_rows($st) {
+    $meta = $st->result_metadata();
+    if ($meta === false) {
+        $n = $st->affected_rows;
+        $st->close();
+        return $n;
+    }
+    $st->store_result();  // BLOB(썸네일) 컬럼도 실제 길이만큼 받도록
+    $row = array();
+    $refs = array();
+    foreach ($meta->fetch_fields() as $f) {
+        $row[$f->name] = null;
+        $refs[] = &$row[$f->name];
+    }
+    $meta->free();
+    call_user_func_array(array($st, 'bind_result'), $refs);
+    $rows = array();
+    while ($st->fetch()) {
+        $copy = array();
+        foreach ($row as $k => $v) {
+            $copy[$k] = $v;
+        }
+        $rows[] = $copy;
+    }
     $st->close();
     return $rows;
 }
@@ -161,9 +210,15 @@ function render_download_buttons($size = '') {
 <button type="submit" name="type" value="orig" class="btn btn-primary dl-btn <?= $size ?>" disabled title="NAS 원본 파일을 ZIP 으로 받습니다"><?= $icon ?> 원본 다운로드</button>
 <?= $thumbBtn ?>
         <?php
-    } elseif (!empty($_origServer) && !empty($_origSecret)) {
+    } elseif (!empty($_origServer) && !empty($_origSecret) && in_office()) {
         ?>
-<button type="submit" name="type" value="orig" formaction="orig_link.php" formtarget="_blank" class="btn btn-primary dl-btn <?= $size ?>" disabled title="사내 원본 서버에서 NAS 원본을 ZIP 으로 받습니다 (사내망 또는 VPN 접속 필요)"><?= $icon ?> 원본 다운로드 <small class="btn-note">사내망</small></button>
+<button type="submit" name="type" value="orig" formaction="orig_link.php" formtarget="_blank" class="btn btn-primary dl-btn <?= $size ?>" disabled title="사내 원본 서버에서 NAS 원본을 ZIP 으로 받습니다"><?= $icon ?> 원본 다운로드 <small class="btn-note">사내망</small></button>
+<?= $thumbBtn ?>
+        <?php
+    } elseif (!empty($_origServer) && !empty($_origSecret)) {
+        // 사내망 밖: 버튼은 보이되 누르면 안내만
+        ?>
+<button type="button" class="btn btn-primary dl-btn <?= $size ?>" disabled data-blocked="사내망에서만 원본 다운로드가 가능합니다." title="사내망에서만 원본 다운로드가 가능합니다"><?= $icon ?> 원본 다운로드</button>
 <?= $thumbBtn ?>
         <?php
     } else {
@@ -291,6 +346,37 @@ function pick_owner($member) {
     }
     $rows = q("SELECT mem_id FROM NAS_MEMBER WHERE mem_id = ? AND db_state IN ('Y', 'N')", 'i', array($want));
     return $rows ? (int)$rows[0]['mem_id'] : null;
+}
+
+// 접속자 IP (cafe24 는 REMOTE_ADDR 가 실제 접속자, 앞단 프록시가 사설 IP 면 X-Real-IP 사용)
+function client_ip() {
+    $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) && !empty($_SERVER['HTTP_X_REAL_IP'])) {
+        $ip = trim($_SERVER['HTTP_X_REAL_IP']);
+    }
+    return $ip;
+}
+
+// 사내망에서 접속했는지 ($_officeIps 비어 있으면 항상 true)
+function in_office() {
+    global $_officeIps;
+    if (empty($_officeIps)) {
+        return true;
+    }
+    $ip = ip2long(client_ip());
+    if ($ip === false) {
+        return false;
+    }
+    foreach ($_officeIps as $net) {
+        $parts = explode('/', $net);
+        $bits = isset($parts[1]) ? (int)$parts[1] : 32;
+        $mask = $bits <= 0 ? 0 : (~0 << (32 - $bits)) & 0xFFFFFFFF;
+        $base = ip2long($parts[0]);
+        if ($base !== false && ($ip & $mask) === ($base & $mask)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // 정수 id 목록 정리

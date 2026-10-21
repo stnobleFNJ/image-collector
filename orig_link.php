@@ -13,6 +13,9 @@ if (empty($_origServer) || empty($_origSecret)) {
     zip_fail('사내 원본 서버가 설정되어 있지 않습니다.');
 }
 
+if (!in_office()) {
+    zip_fail('사내망에서만 원본 다운로드가 가능합니다.');
+}
 $owner = pick_owner($member);  // 총괄 어드민은 다른 계정의 선택도 가능
 if ($owner === null) {
     zip_fail('다운로드할 수 없는 계정입니다.');

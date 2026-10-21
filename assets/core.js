@@ -53,6 +53,12 @@
         return range;
     }
 
+    // 사내망 밖에서 원본 다운로드를 누르면 안내
+    document.addEventListener('click', function (e) {
+        var b = e.target.closest && e.target.closest('[data-blocked]');
+        if (b) { e.preventDefault(); alert(b.dataset.blocked); }
+    });
+
     // 다른 창(메인 ↔ 내 선택 창)에 선택 변경 알림
     var channel = window.BroadcastChannel ? new BroadcastChannel('fnjimg-picks') : null;
     function broadcast(msg) { if (channel) { channel.postMessage(msg); } }
