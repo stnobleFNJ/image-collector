@@ -147,6 +147,14 @@ function render_topbar($member, $active, $withSize = true) {
 function render_download_buttons($size = '') {
     global $_origServer, $_origSecret;
     $icon = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    // 압축 구성 선택: 한 폴더(기본) / 사업명 폴더별
+    ?>
+<div class="zip-layout" role="radiogroup" aria-label="압축 구성">
+    <span class="zip-layout-label">압축 구성</span>
+    <label><input type="radio" name="layout" value="flat" checked><span>한 폴더</span></label>
+    <label><input type="radio" name="layout" value="bs"><span>사업명 폴더별</span></label>
+</div>
+    <?php
     $thumbBtn = '<button type="submit" name="type" value="thumb" class="btn btn-ghost dl-btn ' . $size . '" disabled title="미리보기용 썸네일(최대 320px)을 ZIP 으로 받습니다">썸네일 다운로드</button>';
     if (nas_available()) {
         ?>
@@ -268,6 +276,21 @@ function nas_available() {
         $_SESSION['nas_ok'] = array($ok, time());
     }
     return $ok;
+}
+
+// 선택 목록의 주인: 기본은 본인, 총괄 어드민은 mem 파라미터로 다른 계정 지정 가능
+//   권한이 없거나 없는 계정이면 null
+function pick_owner($member) {
+    $memId = (int)$member['mem_id'];
+    $want = isset($_REQUEST['mem']) ? (int)$_REQUEST['mem'] : 0;
+    if ($want <= 0 || $want === $memId) {
+        return $memId;
+    }
+    if (empty($member['is_admin'])) {
+        return null;
+    }
+    $rows = q("SELECT mem_id FROM NAS_MEMBER WHERE mem_id = ? AND db_state IN ('Y', 'N')", 'i', array($want));
+    return $rows ? (int)$rows[0]['mem_id'] : null;
 }
 
 // 정수 id 목록 정리

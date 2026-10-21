@@ -1,7 +1,7 @@
 <?php
 // 확인 페이지 API
 //   GET  act=items  bs=1,2 offset=0  : 선택 사업의 썸네일 목록
-//   GET  act=picks  bs=1,2           : 내가 선택한 썸네일 (사업 필터 동일 적용)
+//   GET  act=picks  bs=1,2 [mem=3]   : 내가 선택한 썸네일 (사업 필터 동일 적용, mem 은 총괄 어드민만)
 //   POST act=toggle id=123 on=1|0    : 썸네일 선택/해제
 //   POST act=clear  bs=1,2           : 현재 필터의 선택 전체 해제
 define('APP_INIT', true);
@@ -57,15 +57,21 @@ if ($act === 'items') {
 }
 
 if ($act === 'picks') {
+    // 총괄 어드민은 mem=회원번호 로 다른 계정의 선택을 조회 (조회만 가능)
+    $owner = pick_owner($member);
+    if ($owner === null) {
+        json_out(array('ok' => false, 'error' => '조회할 수 없는 계정입니다.'), 403);
+    }
     $filter = $bs ? " AND i.bs_id IN (" . bs_in($bs) . ")" : '';
-    $rows = q("SELECT i.img_id AS id, i.file_name AS name, i.bs_name AS bs, i.bs_year AS yr
+    $rows = q("SELECT i.img_id AS id, i.file_name AS name, i.bs_id AS bsid, i.bs_name AS bs, i.bs_year AS yr
                FROM NAS_MEMBER_PICK p
                JOIN NAS_IMG i ON i.path_hash = p.path_hash AND i.db_state = 'Y'
                WHERE p.mem_id = ? $filter
                ORDER BY p.created_at DESC",
-        'i', array($memId));
+        'i', array($owner));
     foreach ($rows as &$row) {
         $row['id'] = (int)$row['id'];
+        $row['bsid'] = (int)$row['bsid'];
     }
     json_out(array('ok' => true, 'items' => $rows));
 }

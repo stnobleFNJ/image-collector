@@ -299,7 +299,17 @@ small, .muted { color: var(--muted); }
 .picks-names { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420px; margin-left: 6px; font-size: 13px; }
 .picks-actions { display: flex; align-items: center; gap: 12px; }
 .picks-hint { font-size: 12px; }
-.dl-inline { display: flex; gap: 8px; margin: 0; }
+.dl-inline { display: flex; align-items: center; gap: 8px; margin: 0; }
+
+/* 압축 구성 선택 (한 폴더 / 사업명 폴더별) */
+.zip-layout { display: flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); font-size: 12px; }
+.zip-layout-label { padding: 0 6px 0 8px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.zip-layout label { position: relative; flex: 1; cursor: pointer; }
+.zip-layout input { position: absolute; opacity: 0; pointer-events: none; }
+.zip-layout label span { display: block; padding: 5px 11px; border-radius: 999px; color: var(--muted); font-weight: 600; text-align: center; white-space: nowrap; transition: all .15s; }
+.zip-layout label:hover span { color: var(--text); }
+.zip-layout input:checked + span { background: var(--surface); color: var(--accent-ink); box-shadow: 0 1px 4px rgba(35, 33, 31, .12); }
+.zip-layout input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
 .btn-note { padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, .25); font-size: 11px; font-weight: 600; color: inherit; }
 
 /* ---------- 원본 다운로드 안내 (사내 서버) ---------- */
@@ -365,6 +375,25 @@ form.inline { display: inline; margin: 0; }
 .btn-danger { color: var(--danger); }
 .btn-danger:hover:not(:disabled) { background: #fdeeee; border-color: #f3c4c4; }
 
+/* ---------- 계정별 선택 이미지 (어드민) ---------- */
+.card-sub { margin: 4px 0 0; font-size: 13px; }
+.mrow { cursor: pointer; }
+.mlink { display: inline-flex; align-items: center; gap: 5px; color: inherit; font-weight: 600; text-decoration: none; }
+.mlink svg { color: var(--muted); opacity: .5; transition: opacity .15s, color .15s; }
+.mrow:hover .mlink { color: var(--accent-ink); }
+.mrow:hover .mlink svg { opacity: 1; color: var(--accent); }
+.mp-crumb { color: var(--muted); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.mp-owner { display: flex; align-items: center; gap: 14px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.mp-avatar { flex: none; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); font-size: 19px; font-weight: 800; }
+.mp-who { min-width: 0; margin-right: auto; }
+.mp-who h1 { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+.mp-id { font-family: ui-monospace, Consolas, monospace; font-size: 13px; font-weight: 500; color: var(--muted); }
+.mp-who p { margin: 2px 0 0; font-size: 13px; }
+.mp-who p b { color: var(--accent-ink); }
+.mp-dl { flex-wrap: wrap; justify-content: flex-end; }
+#bsAll.on { background: var(--accent-soft); border-color: #f3c3a0; color: var(--accent-ink); }
+.grid.view-only .tile { cursor: default; }
+
 /* ---------- 반응형 ---------- */
 @media (max-width: 1024px) {
     .layout { grid-template-columns: minmax(0, 1fr); }
@@ -387,4 +416,10 @@ form.inline { display: inline; margin: 0; }
     .bs-filter { order: 3; width: 100%; }
     .layout { padding: 16px; }
     .side { top: auto; }
+    .mp-crumb { display: none; }
+    .mp-owner { flex-wrap: wrap; }
+    .mp-dl { width: 100%; justify-content: stretch; }
+    .mp-dl .btn { flex: 1; }
+    .picks-actions, .dl-inline { flex-wrap: wrap; }
+    .dl-inline .zip-layout { width: 100%; }
 }

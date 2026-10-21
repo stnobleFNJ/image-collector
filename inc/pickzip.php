@@ -30,7 +30,14 @@ function pick_rows($memId, $bs, $orig) {
         'i', array((int)$memId));
 }
 
-function send_pick_zip($memId, $bs, $orig) {
+// 압축 구성: 기본은 한 폴더, layout=bs 이면 사업명 폴더별
+function zip_by_bs($v) {
+    return $v === 'bs';
+}
+
+// $tag: 파일명에 붙일 계정 아이디 (어드민이 다른 계정 선택을 받을 때)
+// $byBs: true 면 사업명 폴더를 만들어 나눠 담고, false 면 한 폴더에 모두 담음
+function send_pick_zip($memId, $bs, $orig, $tag = '', $byBs = false) {
     $rows = pick_rows($memId, $bs, $orig);
     if (!$rows) {
         zip_fail('다운로드할 이미지가 없습니다.');
@@ -49,7 +56,7 @@ function send_pick_zip($memId, $bs, $orig) {
     $used = array();
     $total = 0;
     foreach ($rows as $r) {
-        $dir = safe_name($r['bs_name']) . '/';
+        $dir = $byBs ? safe_name($r['bs_name']) . '/' : '';
         if ($orig) {
             $src = nas_path($r['folder_path'], $r['file_name']);
             $size = is_file($src) ? filesize($src) : false;
@@ -62,7 +69,7 @@ function send_pick_zip($memId, $bs, $orig) {
                 continue;
             }
             $total += $size;
-            // 같은 사업 안에 같은 파일명이 있으면 img_id 를 붙여 구분
+            // 같은 폴더 안에 같은 파일명이 있으면 img_id 를 붙여 구분 (한 폴더 모드는 사업이 달라도 겹칠 수 있음)
             $entry = $dir . safe_name($r['file_name']);
             if (isset($used[mb_strtolower($entry)])) {
                 $entry = $dir . safe_name(pathinfo($r['file_name'], PATHINFO_FILENAME)) . '_' . $r['img_id']
@@ -90,7 +97,7 @@ function send_pick_zip($memId, $bs, $orig) {
     }
 
     $stamp = date('Ymd_His');
-    $label = $orig ? '원본' : '썸네일';
+    $label = ($orig ? '원본' : '썸네일') . ($tag !== '' ? '_' . safe_name($tag) : '');
     header('Content-Type: application/zip');
     header('Content-Length: ' . filesize($tmp));
     header("Content-Disposition: attachment; filename=\"FNJ_images_{$stamp}.zip\"; filename*=UTF-8''" . rawurlencode("FNJ_{$label}_{$stamp}.zip"));
@@ -120,13 +127,22 @@ function b64url_dec($s) {
 }
 
 // cafe24 에서 발급: 회원·사업 필터·만료시각을 HMAC 으로 서명
-function orig_token($memId, $bs, $ttl = 300) {
+//   $owner: 선택 목록의 주인 (어드민이 다른 계정 선택을 받을 때, 기본은 본인)
+//   $byBs : 사업명 폴더별 압축 여부
+function orig_token($memId, $bs, $owner = 0, $byBs = false, $ttl = 300) {
     global $_origSecret;
-    $payload = b64url(json_encode(array('m' => (int)$memId, 'b' => array_values($bs), 'e' => time() + $ttl)));
+    $d = array('m' => (int)$memId, 'b' => array_values($bs), 'e' => time() + $ttl);
+    if ($byBs) {
+        $d['g'] = 1;
+    }
+    if ($owner && (int)$owner !== (int)$memId) {
+        $d['o'] = (int)$owner;
+    }
+    $payload = b64url(json_encode($d));
     return $payload . '.' . b64url(hash_hmac('sha256', $payload, $_origSecret, true));
 }
 
-// 사내 서버에서 검증: 성공 시 array('m' => mem_id, 'b' => bs[]), 실패 시 오류 문자열
+// 사내 서버에서 검증: 성공 시 array('m' => 요청 회원, 'o' => 선택 주인, 'b' => bs[], 'g' => 사업별 폴더), 실패 시 오류 문자열
 function orig_token_verify($token) {
     global $_origSecret;
     if (empty($_origSecret) || !is_string($token) || substr_count($token, '.') !== 1) {
@@ -143,5 +159,6 @@ function orig_token_verify($token) {
     if ($d['e'] < time()) {
         return '링크 유효시간(5분)이 지났습니다. 이미지 확인 화면에서 다시 눌러 주세요.';
     }
-    return array('m' => (int)$d['m'], 'b' => int_list(isset($d['b']) ? $d['b'] : array()));
+    return array('m' => (int)$d['m'], 'o' => empty($d['o']) ? (int)$d['m'] : (int)$d['o'],
+                 'b' => int_list(isset($d['b']) ? $d['b'] : array()), 'g' => !empty($d['g']));
 }

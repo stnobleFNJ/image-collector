@@ -93,6 +93,7 @@ $activeCnt = count(array_filter($members, function ($m) { return $m['db_state'] 
     <section class="card">
         <div class="card-head">
             <h2>등록된 계정 <small><?= $activeCnt ?>명 사용 중 · 전체 <?= count($members) ?>명</small></h2>
+            <p class="muted card-sub">계정을 클릭하면 그 계정이 선택한 이미지를 새 창에서 보고 다운로드할 수 있습니다.</p>
         </div>
         <div class="table-wrap">
             <table class="mtable">
@@ -104,9 +105,12 @@ $activeCnt = count(array_filter($members, function ($m) { return $m['db_state'] 
                 </thead>
                 <tbody>
                 <?php foreach ($members as $m): $isMe = (int)$m['mem_id'] === (int)$member['mem_id']; ?>
-                    <tr class="<?= $m['db_state'] === 'Y' ? '' : 'off' ?>">
+                    <tr class="mrow <?= $m['db_state'] === 'Y' ? '' : 'off' ?>" data-href="member_picks.php?m=<?= (int)$m['mem_id'] ?>">
                         <td>
-                            <?= h($m['name']) ?>
+                            <a class="mlink" href="member_picks.php?m=<?= (int)$m['mem_id'] ?>" target="_blank" title="선택한 이미지 보기 (새 창)">
+                                <?= h($m['name']) ?>
+                                <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M14 4h6v6M20 4l-8 8M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </a>
                             <?php if ($m['is_admin']): ?><em class="role">관리자</em><?php endif; ?>
                         </td>
                         <td class="mono"><?= h($m['login_id']) ?></td>
@@ -146,6 +150,14 @@ $activeCnt = count(array_filter($members, function ($m) { return $m['db_state'] 
 </div>
 
 <script>
+// 계정 행 클릭 → 선택 이미지 새 창 (전체 창)
+document.querySelectorAll('tr[data-href]').forEach(function (tr) {
+    tr.addEventListener('click', function (e) {
+        if (e.target.closest('a, button, form')) { return; }
+        var w = window.open(tr.dataset.href, '_blank');
+        if (w) { w.focus(); } else { location.href = tr.dataset.href; }
+    });
+});
 document.querySelectorAll('form[data-confirm]').forEach(function (f) {
     f.addEventListener('submit', function (e) {
         if (!confirm(f.dataset.confirm)) { e.preventDefault(); }

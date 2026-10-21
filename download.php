@@ -15,6 +15,17 @@ $orig = isset($_POST['type']) && $_POST['type'] === 'orig';
 if ($orig && !nas_available()) {
     zip_fail('이 서버에서는 NAS 원본에 접근할 수 없습니다. 썸네일 다운로드를 이용해 주세요.');
 }
+// 총괄 어드민은 mem=회원번호 로 다른 계정의 선택을 받을 수 있음
+$owner = pick_owner($member);
+if ($owner === null) {
+    zip_fail('다운로드할 수 없는 계정입니다.');
+}
+$tag = '';
+if ($owner !== (int)$member['mem_id']) {
+    $o = q("SELECT login_id FROM NAS_MEMBER WHERE mem_id = ?", 'i', array($owner));
+    $tag = $o[0]['login_id'];
+}
 session_write_close();
 
-send_pick_zip($member['mem_id'], int_list(isset($_POST['bs']) ? $_POST['bs'] : ''), $orig);
+send_pick_zip($owner, int_list(isset($_POST['bs']) ? $_POST['bs'] : ''), $orig, $tag,
+    zip_by_bs(isset($_POST['layout']) ? $_POST['layout'] : ''));
