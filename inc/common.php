@@ -212,13 +212,13 @@ function render_download_buttons($size = '') {
         <?php
     } elseif (!empty($_origServer) && !empty($_origSecret) && in_office()) {
         ?>
-<button type="submit" name="type" value="orig" formaction="orig_link.php" formtarget="_blank" class="btn btn-primary dl-btn <?= $size ?>" disabled title="사내 원본 서버에서 NAS 원본을 ZIP 으로 받습니다"><?= $icon ?> 원본 다운로드 <small class="btn-note">사내망</small></button>
+<button type="submit" name="type" value="orig" formaction="orig_link.php" formtarget="_blank" class="btn btn-primary dl-btn <?= $size ?>" disabled title="사내 원본 서버에서 NAS 원본을 ZIP 으로 받습니다 (접속 IP <?= h(client_ip()) ?>)"><?= $icon ?> 원본 다운로드 <small class="btn-note">사내망</small></button>
 <?= $thumbBtn ?>
         <?php
     } elseif (!empty($_origServer) && !empty($_origSecret)) {
         // 사내망 밖: 버튼은 보이되 누르면 안내만
         ?>
-<button type="button" class="btn btn-primary dl-btn <?= $size ?>" disabled data-blocked="사내망에서만 원본 다운로드가 가능합니다." title="사내망에서만 원본 다운로드가 가능합니다"><?= $icon ?> 원본 다운로드</button>
+<button type="button" class="btn btn-primary dl-btn <?= $size ?>" disabled data-blocked="사내망에서만 원본 다운로드가 가능합니다." title="사내망에서만 원본 다운로드가 가능합니다 (접속 IP <?= h(client_ip()) ?>)"><?= $icon ?> 원본 다운로드</button>
 <?= $thumbBtn ?>
         <?php
     } else {
@@ -348,20 +348,25 @@ function pick_owner($member) {
     return $rows ? (int)$rows[0]['mem_id'] : null;
 }
 
-// 접속자 IP (cafe24 는 REMOTE_ADDR 가 실제 접속자, 앞단 프록시가 사설 IP 면 X-Real-IP 사용)
+// 접속자 IP (cafe24 는 REMOTE_ADDR 가 실제 접속자, 앞단 프록시가 사설 IP 면 X-Real-IP / X-Forwarded-For 사용)
 function client_ip() {
     $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
-    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) && !empty($_SERVER['HTTP_X_REAL_IP'])) {
-        $ip = trim($_SERVER['HTTP_X_REAL_IP']);
+    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+        if (!empty($_SERVER['HTTP_X_REAL_IP'])) {
+            $ip = trim($_SERVER['HTTP_X_REAL_IP']);
+        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $list = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+            $ip = trim(end($list));  // 프록시가 마지막에 붙인 값
+        }
     }
     return $ip;
 }
 
-// 사내망에서 접속했는지 ($_officeIps 비어 있으면 항상 true)
+// 사내망에서 접속했는지 ($_officeIps 가 설정되지 않았으면 사내망으로 보지 않음)
 function in_office() {
     global $_officeIps;
-    if (empty($_officeIps)) {
-        return true;
+    if (empty($_officeIps) || !is_array($_officeIps)) {
+        return false;
     }
     $ip = ip2long(client_ip());
     if ($ip === false) {
